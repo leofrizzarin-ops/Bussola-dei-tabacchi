@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bussola dei Tabacchi — Padova</title>
+<style>
+  :root { font-family: system-ui, -apple-system, sans-serif; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(circle at 50% 20%, #1c2431 0%, #0c0f14 70%);
+    color: #e8eaf0; min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 16px; -webkit-user-select: none; user-select: none;
+  }
+  h1 { font-size: 1.1rem; letter-spacing: 2px; margin: 8px 0 2px; text-transform: uppercase; }
+  .subtitle { color: #8a93a6; font-size: .8rem; margin-bottom: 12px; }
+  #compassWrap { position: relative; width: min(78vw, 340px); height: min(78vw, 340px); touch-action: none; cursor: grab; }
+  #compass { width: 100%; height: 100%; }
+  .needle-label {
+    position: absolute; left: 50%; top: 14.5%; transform: translate(-50%, -50%);
+    font-size: 1.4rem; pointer-events: none; text-shadow: 0 2px 6px #000;
+  }
+  #status { margin-top: 14px; font-size: .85rem; color: #aab3c5; text-align: center; max-width: 360px; min-height: 1.2em; }
+  #status .ok { color: #7fd8a4; }
+  #status .warn { color: #ffb4a2; }
+  #targetCard {
+    margin-top: 10px; background: #161c26; border: 1px solid #2a3446; border-radius: 14px;
+    padding: 12px 16px; width: min(92vw, 360px); text-align: center;
+  }
+  #targetCard .name { font-weight: 700; font-size: 1.05rem; }
+  #targetCard .addr { color: #8a93a6; font-size: .8rem; margin-top: 2px; }
+  #targetCard .dist { color: #ffd166; font-size: 1.6rem; font-weight: 800; margin: 6px 0; font-variant-numeric: tabular-nums; }
+  #targetCard .hours { color: #7fd8a4; font-size: .75rem; margin-top: 4px; }
+  #targetCard a { color: #6cb2ff; font-size: .8rem; display: inline-block; margin-top: 8px; text-decoration: none; }
+  #targetCard a.gm { color: #8ab4f8; }
+  #list { margin-top: 14px; width: min(92vw, 360px); }
+  #list h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: 1.5px; color: #8a93a6; margin-bottom: 6px; }
+  .item {
+    display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px;
+    background: #12161f; border: 1px solid #232c3b; border-radius: 10px; margin-bottom: 6px;
+    cursor: pointer; font-size: .85rem;
+  }
+  .item.active { border-color: #ffd166; background: #1b2130; }
+  .item .d { color: #ffd166; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #controls { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  button {
+    background: #ffd166; color: #111; border: 0; border-radius: 10px; padding: 10px 16px;
+    font-weight: 700; font-size: .85rem; cursor: pointer;
+  }
+  button.secondary { background: #2a3446; color: #e8eaf0; }
+  #manualHint { color: #8a93a6; font-size: .75rem; margin-top: 8px; text-align: center; max-width: 360px; }
+  #slider { width: min(92vw, 360px); margin-top: 8px; accent-color: #ffd166; }
+  #mapSec { margin-top: 18px; width: min(92vw, 380px); }
+  #mapSec h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: 1.5px; color: #8a93a6; margin-bottom: 6px; }
+  #mapSec .hint { color: #6b7488; font-size: .72rem; margin-top: 6px; text-align: center; }
+  #map { width: 100%; border: 1px solid #2a3446; border-radius: 12px; background: #10141c; cursor: crosshair; }
+  #presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; justify-content: center; }
+  #presets button { padding: 7px 10px; font-size: .75rem; font-weight: 600; background: #2a3446; color: #e8eaf0; }
+  #presets button.active { background: #ffd166; color: #111; }
+</style>
+</head>
+<body>
+<h1>🧭 Bussola dei Tabacchi</h1>
+<div class="subtitle">Padova — dati: OpenStreetMap (ODbL)</div>
+
+<div id="compassWrap">
+  <svg id="compass" viewBox="0 0 200 200"></svg>
+  <div class="needle-label">🚬</div>
+</div>
+
+<div id="targetCard">
+  <div class="name">—</div>
+  <div class="addr"></div>
+  <div class="dist">—</div>
+  <div class="hours"></div>
+  <a class="osm" href="#" target="_blank" rel="noopener">OpenStreetMap ↗</a> · <a class="gm" href="#" target="_blank" rel="noopener">Google Maps ↗</a>
+</div>
+
+<div id="status">Attendo posizione…</div>
+<div id="controls">
+  <button id="btnLoc">📍 Usa la mia posizione</button>
+  <button id="btnSensor" class="secondary" style="display:none">🧭 Attiva bussola</button>
+</div>
+<input type="range" id="slider" min="0" max="359" value="0" style="display:none" />
+<div id="manualHint" style="display:none">Nessun sensore di orientamento: trascina sulla bussola (o usa il cursore) per impostare a che punto sei girato rispetto al nord.</div>
+
+<div id="mapSec">
+  <h2>Posizione manuale — mappa di Padova</h2>
+  <svg id="map" viewBox="0 0 400 340"></svg>
+  <div class="hint">Tocca un punto della mappa per piazzarti lì. Il cerchio giallo è il tabacchio selezionato.</div>
+  <div id="presets"></div>
+</div>
+
+<div id="list"><h2>Più vicini</h2><div id="items"></div></div>
+
+<script>
+const TABACCHI = [{"n":"Tabaccheria Crivellari riv. 73","a":"Via Fabrici Girolamo D'Acquapendente","h":"","lat":45.3882902,"lon":11.8807214},{"n":"Tabacchi","a":"Via del Vescovado 64","h":"","lat":45.4056684,"lon":11.8694831},{"n":"Tabacchi","a":"","h":"","lat":45.4101509,"lon":11.8688956},{"n":"Tabacchi","a":" 123","h":"","lat":45.4029647,"lon":11.8722178},{"n":"Tabacchi","a":" 13","h":"","lat":45.4052854,"lon":11.8724411},{"n":"Sali e tabacchi","a":"Via San Martino e Solferino 20","h":"Mo 15:00-19:45; Tu-Sa 08:00-12:45,15:00-19:45","lat":45.4059305,"lon":11.8754439},{"n":"Tabacchi","a":" 18/3","h":"","lat":45.4100133,"lon":11.8781675},{"n":"Tabacchi","a":" 36","h":"","lat":45.4093256,"lon":11.8760478},{"n":"Tabacchi","a":"Piazza Capitaniato 11","h":"","lat":45.4082208,"lon":11.8709779},{"n":"Valori Bollati","a":"","h":"","lat":45.3980735,"lon":11.878532},{"n":"Tabacchi","a":" 56","h":"","lat":45.4109581,"lon":11.8759349},{"n":"Tabacchi","a":"","h":"","lat":45.4082861,"lon":11.8767862},{"n":"Tabaccheria Cavour","a":" 17","h":"","lat":45.4083425,"lon":11.8765946},{"n":"Tabacchi","a":"Via Trieste 20","h":"","lat":45.4142944,"lon":11.8767643},{"n":"Tabacchi","a":"Via Sorio 12","h":"","lat":45.4030821,"lon":11.8610528},{"n":"Tabacchi","a":"Corso Giuseppe Garibaldi 16","h":"","lat":45.4099356,"lon":11.8781479},{"n":"Tabacchi","a":"","h":"","lat":45.377119,"lon":11.8990655},{"n":"John Smoke","a":"","h":"","lat":45.379414,"lon":11.902673},{"n":"Rivendita 22","a":"","h":"Mo-Fr 06:30-19:30; Sa,Su 07:30-19:30","lat":45.4173531,"lon":11.8811013},{"n":"Tabacchi","a":"","h":"","lat":45.3999367,"lon":11.9102897},{"n":"Tabacchi","a":"","h":"","lat":45.41094,"lon":11.8760086},{"n":"Tabacchi","a":"","h":"","lat":45.408621,"lon":11.8787736},{"n":"Club della Pipa","a":"","h":"","lat":45.4078322,"lon":11.8760972},{"n":"Tabacchi","a":"","h":"Mo-Su 07:30-13:00,15:30-19:30","lat":45.407319,"lon":11.8757119},{"n":"Tabacchi","a":"","h":"","lat":45.4225009,"lon":11.8836227},{"n":"Tabacchi","a":"","h":"","lat":45.431506,"lon":11.889615},{"n":"Tabacchi","a":"","h":"","lat":45.4346699,"lon":11.8910137},{"n":"Tabacchi","a":"","h":"","lat":45.4116556,"lon":11.8706977},{"n":"Tabaccheria Chiarentin","a":"Via Piovese 8","h":"","lat":45.3811328,"lon":11.9012443},{"n":"Tabacchi","a":"","h":"","lat":45.3331682,"lon":11.864803},{"n":"Tabacchi","a":"","h":"","lat":45.4052823,"lon":11.8724731},{"n":"Tabaccheria, rivendita 62","a":"Via Bezzecca","h":"","lat":45.4177966,"lon":11.8647678},{"n":"Tabaccheria - cartoleria","a":"Via Gabriele Falloppio 2","h":"","lat":45.4074177,"lon":11.8853703},{"n":"Tabacchi","a":"Via del Portello 2a","h":"","lat":45.4072168,"lon":11.8922546},{"n":"Tabacchi","a":"","h":"","lat":45.4251358,"lon":11.8505184},{"n":"Gino's Tabacchi","a":"Via Niccolò Tommaseo 70a","h":"Mo-Fr 07:30-17:30","lat":45.4143887,"lon":11.8863018},{"n":"Tabacchi","a":"","h":"","lat":45.4579566,"lon":11.8825437},{"n":"Tabaccheria Chiesanuova","a":"","h":"","lat":45.4123669,"lon":11.8404521},{"n":"Tabaccheria Martin","a":"","h":"","lat":45.4173139,"lon":11.8247876},{"n":"Tabacchi Dussin","a":"Via Roma 71","h":"","lat":45.4142474,"lon":11.9510289},{"n":"Tabacchi","a":"","h":"","lat":45.408629,"lon":11.877522},{"n":"Tabacchi","a":"","h":"","lat":45.4268633,"lon":11.8769772},{"n":"Tabacchi","a":"","h":"","lat":45.3947416,"lon":11.8725481},{"n":"Tabacchi","a":"","h":"","lat":45.414659,"lon":11.8750454},{"n":"Tabaccheria Al Ponte","a":"","h":"","lat":45.4081965,"lon":11.948574},{"n":"Tabacchi","a":"","h":"","lat":45.4145246,"lon":11.9047301},{"n":"Camporese Catia","a":"","h":"","lat":45.4105292,"lon":11.9024246},{"n":"Tabacchi","a":"","h":"","lat":45.4084295,"lon":11.902228},{"n":"Tabacchi","a":"","h":"","lat":45.3541871,"lon":11.8958121},{"n":"Tabacchi","a":"","h":"","lat":45.4036522,"lon":11.8754991},{"n":"Tabacchi","a":"Via Pelosa 85","h":"","lat":45.4115156,"lon":11.8138675},{"n":"Tabaccheria n. 81","a":"","h":"","lat":45.4249139,"lon":11.893123},{"n":"Bar Tabaccheria Vittoria","a":"","h":"","lat":45.4211737,"lon":11.8818205},{"n":"Tabacchi","a":"","h":"","lat":45.412689,"lon":11.8855313},{"n":"Tabacchi","a":"Via Gattamelata 7","h":"","lat":45.3998806,"lon":11.887362},{"n":"Tabacchi","a":"","h":"","lat":45.4179384,"lon":11.8728887},{"n":"Cartoleria Montà","a":"Padova","h":"","lat":45.4322469,"lon":11.8409925},{"n":"Città Giardino - da Ignazio","a":"Via Francesco Nullo 6","h":"","lat":45.3980243,"lon":11.8676496},{"n":"Tabaccheria Zilio","a":"Viale Po 2b","h":"","lat":45.4227853,"lon":11.8187526},{"n":"Cartoleria Tabaccheria Gallo Elisabetta","a":"Via Guizza 201","h":"","lat":45.3752535,"lon":11.8708457},{"n":"Cartoleria Edicola Tabaccheria Jessica","a":"Piazza Municipio 35","h":"Mo-Fr 06:55-12:40,15:30-19:30, Sa 06:55-12:55,15:30-19:30, Su 07:30-12:30","lat":45.3201468,"lon":11.8641608},{"n":"Tabaccheria cartoleria","a":"Via Palestro 59","h":"","lat":45.4071147,"lon":11.8577559},{"n":"Tabaccheria cartoleria","a":"Via Palestro 12","h":"","lat":45.4069832,"lon":11.8614614},{"n":"Tabacchi Drago Samuele","a":"Via Buonarroti, 89/91","h":"","lat":45.4263456,"lon":11.8787932},{"n":"Smoke & Service di Inglese Lanfranco","a":"Via Gattamelata, 158","h":"","lat":45.403373,"lon":11.8981646},{"n":"Perlasca Katty","a":"Corso Giuseppe Garibaldi, 40","h":"","lat":45.4108383,"lon":11.8783147},{"n":"Tabaccheria di Valeria Gasparin","a":"Via Jacopo Facciolati, 53","h":"","lat":45.3852953,"lon":11.8981273},{"n":"Tabaccheria Trieste","a":"Via Trieste, 20/C","h":"","lat":45.4128797,"lon":11.881988},{"n":"Club Amici della Pipa tabaccheria","a":"Corso Milano, 56","h":"","lat":45.4094727,"lon":11.8701541},{"n":"Tabaccheria Cartoleria Rivendita 58 Padova","a":"Via Venezia, 4","h":"","lat":45.4103851,"lon":11.8930722},{"n":"Baccaglini Paolo","a":"Via Siracusa, 9","h":"","lat":45.3927195,"lon":11.8633019},{"n":"Crivellaro Maria","a":"Via Venti Settembre, 66","h":"","lat":45.4031632,"lon":11.8739412},{"n":"Frescura Tabaccheria","a":"Piazzale Santa Croce, 10","h":"","lat":45.3924675,"lon":11.871207},{"n":"Gallo Elisabetta","a":"Via Guizza Conselvana, 201","h":"","lat":45.3830978,"lon":11.8687684},{"n":"Gobbo Davide","a":"Via Pietro Bembo, 178","h":"","lat":45.3606468,"lon":11.8931757},{"n":"New Bet","a":"Via Montà, 89","h":"","lat":45.4442587,"lon":11.8313395},{"n":"Non Solo Vizi","a":"Via Chiesanuova, 178/A","h":"","lat":45.4175351,"lon":11.8265278},{"n":"Rivendita 24","a":"Via San Francesco, 210","h":"","lat":45.4022768,"lon":11.8834147},{"n":"Tabaccheria di Stefano Galeazzo","a":"Via dei Colli, 40/A","h":"","lat":45.3983837,"lon":11.8405484},{"n":"Tabaccheria Gregory","a":"Via Vigonovese, 39","h":"","lat":45.3980854,"lon":11.9730577},{"n":"Tabaccheria N.45","a":"Via Pontevigodarzere, 120","h":"","lat":45.4489573,"lon":11.8956982},{"n":"Tabaccheria Roma","a":"Via Roma, 118","h":"","lat":45.4049392,"lon":11.8761056},{"n":"Tabaccheria Sacro Cuore","a":"Via Ospedale Civile, 101","h":"","lat":45.4040833,"lon":11.887204},{"n":"Tabaccheria","a":"Via Gattamelata, 5","h":"","lat":45.40118,"lon":11.9042292},{"n":"Turatto Valeria Tabaccheria","a":"Via Savonarola, 164","h":"","lat":45.4120047,"lon":11.8655914},{"n":"Al Canton","a":"Via Romania, 4","h":"","lat":45.3834469,"lon":11.9420702},{"n":"Al Dazio","a":"Via Aspetti Tiziano, 159","h":"","lat":45.4244455,"lon":11.8845763},{"n":"Cardella Patrizia","a":"Via Vigonovese, 260","h":"","lat":45.4062066,"lon":11.9124968},{"n":"Civolani Davide","a":"Via Cesare Battisti 24","h":"","lat":45.4067669,"lon":11.8788514},{"n":"Non Solo Tabacchi","a":"Via Astorre Lanari 13","h":"","lat":45.4249667,"lon":11.9145707},{"n":"Bottega del Fumatore","a":"Via Madonna della Salute, 33","h":"","lat":45.4275849,"lon":11.9141312},{"n":"Tabaccheria Riello Emanuele","a":"Via Sacro Cuore, 23","h":"","lat":45.4334151,"lon":11.8710032},{"n":"Battel Cristian","a":"Via dei Colli, 105","h":"","lat":45.3974601,"lon":11.8356098},{"n":"Illary Cafes","a":"Via della Provvidenza, 33, Sarmeola, Rubano","h":"","lat":45.4188348,"lon":11.8229718},{"n":"Tabaccheria di Saverio Zaccaria","a":"Via Altichiero, 127/A","h":"","lat":45.4518272,"lon":11.8614753},{"n":"Bar Tabacchi Elvis","a":"Via Altichiero, 30","h":"","lat":45.4467126,"lon":11.8720246}];
+
+// Riferimenti Padova (per la posizione manuale precisa)
+const PRESETS = [
+  { n: 'Piazza dei Signori', lat: 45.40781, lon: 11.87642 },
+  { n: 'Stazione FS', lat: 45.40648, lon: 11.87736 },
+  { n: 'Prato della Valle', lat: 45.39761, lon: 11.87564 },
+  { n: 'Piazzale Boschetti', lat: 45.41159, lon: 11.87278 },
+  { n: 'Piazza Garibaldi (Portello)', lat: 45.40452, lon: 11.89181 },
+  { n: 'Fiera (PadovaFiere)', lat: 45.42117, lon: 11.89335 }
+];
+
+// Limiti mappa (area tabacchi + margine)
+const B = { latMin: 45.325, latMax: 45.465, lonMin: 11.805, lonMax: 11.960 };
+
+let userPos = null, heading = null, sensorMode = false, posSource = 'demo';
+let target = null, nearest = [];
+let gpsAccuracy = null, gpsCourse = null;
+
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+function setStatus(text, cls){ statusEl.innerHTML = '<span class="' + (cls || '') + '">' + text + '</span>'; }
+
+function toRad(d){ return d * Math.PI / 180; }
+function toDeg(r){ return r * 180 / Math.PI; }
+function bearing(a, b){
+  const f1 = toRad(a.lat), f2 = toRad(b.lat), dl = toRad(b.lon - a.lon);
+  const y = Math.sin(dl) * Math.cos(f2);
+  const x = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+function haversine(a, b){
+  const R = 6371000;
+  const df = toRad(b.lat - a.lat), dl = toRad(b.lon - a.lon);
+  const h = Math.sin(df/2)**2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dl/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function fmtDist(m){
+  return m < 1000 ? Math.round(m) + ' m' : (m/1000).toFixed(2) + ' km';
+}
+// interpolazione angolare più corta (per smoothing bussola)
+function lerpAngle(a, b, t){
+  let d = ((b - a + 540) % 360) - 180;
+  return (a + d * t + 360) % 360;
+}
+
+function computeNearest(){
+  nearest = TABACCHI
+    .map(t => Object.assign({}, t, { dist: haversine(userPos, t) }))
+    .sort((x, y) => x.dist - y.dist);
+  target = nearest[0];
+  render();
+}
+function setPos(pos, label, source){
+  userPos = pos;
+  posSource = source || 'demo';
+  if (label) setStatus(label, 'ok');
+  computeNearest();
+}
+
+// ---------- GPS con errori differenziati ----------
+function useMyLocation(){
+  if (!navigator.geolocation || !window.isSecureContext && location.protocol !== 'file:'){
+    setStatus('Geolocalizzazione non disponibile in questo contesto. Usa la mappa qui sotto per posizionarti a mano.', 'warn');
+    return;
+  }
+  setStatus('Rilevo la posizione (concedi il permesso)…');
+  navigator.geolocation.getCurrentPosition(onGps, onGpsError,
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+}
+function onGps(p){
+  const c = p.coords;
+  gpsAccuracy = c.accuracy;
+  userPos = { lat: c.latitude, lon: c.longitude };
+  posSource = 'gps';
+  if (typeof c.heading === 'number' && !isNaN(c.heading) && c.speed > 0.8){
+    gpsCourse = c.heading; // direzione di movimento dal GPS: più affidabile del magnetometro
+    if (!sensorMode) heading = gpsCourse;
+  }
+  const acc = '±' + Math.round(c.accuracy) + ' m';
+  setStatus('GPS attivo ✅ accuratezza ' + acc +
+    (c.accuracy > 40 ? ' — scarsa, meglio restare sotto cielo aperto' : ''), c.accuracy > 40 ? 'warn' : 'ok');
+  computeNearest();
+  navigator.geolocation.watchPosition(onGpsWatch, onGpsError,
+    { enableHighAccuracy: true, maximumAge: 2000 });
+}
+function onGpsWatch(p){
+  const c = p.coords;
+  gpsAccuracy = c.accuracy;
+  userPos = { lat: c.latitude, lon: c.longitude };
+  posSource = 'gps';
+  if (typeof c.heading === 'number' && !isNaN(c.heading) && c.speed > 0.8) gpsCourse = c.heading;
+  computeNearest();
+}
+function onGpsError(e){
+  let msg;
+  if (e.code === e.PERMISSION_DENIED){
+    msg = 'Permesso geolocalizzazione negato. Se sei nell\u2019anteprima della canvas, il GPS è bloccato dal sandbox: ' +
+      'scarica il file HTML e aprilo direttamente nel browser (o da un telefono), poi concedi il permesso. ' +
+      'Nel frattempo, tocca la mappa qui sotto per posizionarti.';
+  } else if (e.code === e.POSITION_UNAVAILABLE){
+    msg = 'Posizione non disponibile (GPS spento o nessun segnale). Controlla che la localizzazione sia attiva, poi riprova; oppure usa la mappa.';
+  } else if (e.code === e.TIMEOUT){
+    msg = 'Timeout del GPS: segnale lento. Vai sotto cielo aperto e riprova, oppure usa la mappa.';
+  } else {
+    msg = 'Errore GPS: ' + e.message + '. Puoi usare la mappa qui sotto.';
+  }
+  setStatus(msg, 'warn');
+}
+
+// ---------- bussola con smoothing ----------
+let headingSmooth = null;
+function onOrientation(e){
+  let h = null;
+  if (typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading;
+  else if (e.absolute && typeof e.alpha === 'number') h = (360 - e.alpha) % 360;
+  else if (typeof e.alpha === 'number' && e.type === 'deviceorientationabsolute') h = (360 - e.alpha) % 360;
+  if (h !== null){
+    sensorMode = true;
+    headingSmooth = headingSmooth === null ? h : lerpAngle(headingSmooth, h, 0.25);
+    heading = headingSmooth;
+    render();
+  }
+}
+async function enableSensor(){
+  const D = window.DeviceOrientationEvent;
+  if (!D){ showManual(); return; }
+  if (typeof D.requestPermission === 'function'){
+    try {
+      const r = await D.requestPermission();
+      if (r !== 'granted'){ showManual(); return; }
+    } catch(err){ showManual(); return; }
+  }
+  window.addEventListener('deviceorientationabsolute', onOrientation, true);
+  window.addEventListener('deviceorientation', onOrientation, true);
+  setTimeout(() => { if (!sensorMode) showManual(); }, 1500);
+}
+function showManual(){
+  $('slider').style.display = 'block';
+  $('manualHint').style.display = 'block';
+  if (heading === null) heading = parseFloat($('slider').value);
+  render();
+}
+
+// ---------- mappa cliccabile ----------
+function toMap(lat, lon){
+  const x = (lon - B.lonMin) / (B.lonMax - B.lonMin) * 400;
+  const y = 340 - (lat - B.latMin) / (B.latMax - B.latMin) * 340;
+  return [x, y];
+}
+function toLL(x, y){
+  const lon = B.lonMin + x / 400 * (B.lonMax - B.lonMin);
+  const lat = B.latMin + (340 - y) / 340 * (B.latMax - B.latMin);
+  return { lat, lon };
+}
+function renderMap(){
+  let dots = '';
+  for (const t of TABACCHI){
+    const [x, y] = toMap(t.lat, t.lon);
+    const sel = target && t.lat === target.lat && t.lon === target.lon;
+    dots += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (sel ? 5 : 2.6) +
+      '" fill="' + (sel ? '#ffd166' : '#5a86c9') + '" stroke="#0c0f14" stroke-width="1"/>';
+  }
+  let me = '';
+  if (userPos){
+    const [x, y] = toMap(userPos.lat, userPos.lon);
+    const r = gpsAccuracy ? Math.max(3, gpsAccuracy / ((B.lonMax - B.lonMin) / 400 * 74000)) : 6;
+    me = '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + r.toFixed(1) +
+      '" fill="rgba(127,216,164,.15)" stroke="#7fd8a4" stroke-width="1"/>' +
+      '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="4" fill="#7fd8a4" stroke="#0c0f14" stroke-width="1.5"/>';
+  }
+  $('map').innerHTML =
+    '<rect x="0" y="0" width="400" height="340" fill="#10141c"/>' +
+    '<text x="200" y="26" fill="#2a3446" font-size="12" text-anchor="middle">NORD</text>' + dots + me;
+}
+function mapClick(e){
+  const r = $('map').getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * 400;
+  const y = (e.clientY - r.top) / r.height * 340;
+  const p = toLL(x, y);
+  gpsAccuracy = null;
+  userPos = p;
+  posSource = 'manual';
+  document.querySelectorAll('#presets button').forEach(b => b.classList.remove('active'));
+  setStatus('Posizione manuale: lat ' + p.lat.toFixed(5) + ', lon ' + p.lon.toFixed(5), 'ok');
+  computeNearest();
+}
+$('map').addEventListener('click', mapClick);
+$('map').addEventListener('touchend', e => {
+  if (e.changedTouches.length === 1) mapClick(e.changedTouches[0]);
+});
+
+// preset
+const presetsEl = $('presets');
+PRESETS.forEach((p, i) => {
+  const b = document.createElement('button');
+  b.textContent = p.n;
+  b.addEventListener('click', () => {
+    gpsAccuracy = null;
+    document.querySelectorAll('#presets button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    setPos(p, 'Posizione: ' + p.n, 'preset');
+  });
+  presetsEl.appendChild(b);
+});
+
+// ---------- rendering ----------
+function needleRotation(){
+  if (!target || !userPos) return 0;
+  const b = bearing(userPos, target);
+  return heading === null ? b : (b - heading + 360) % 360;
+}
+function render(){
+  const rot = needleRotation();
+  let ticks = '';
+  for (let i = 0; i < 72; i++){
+    const a = i * 5, big = a % 45 === 0;
+    const r1 = big ? 78 : 86, r2 = 92, rad = toRad(a);
+    ticks += '<line x1="' + (100 + r1*Math.sin(rad)) + '" y1="' + (100 - r1*Math.cos(rad)) +
+      '" x2="' + (100 + r2*Math.sin(rad)) + '" y2="' + (100 - r2*Math.cos(rad)) +
+      '" stroke="' + (a === 0 ? '#ff5252' : '#5a6578') + '" stroke-width="' + (big ? 2 : 1) + '"/>';
+  }
+  const dirs = [['N',0,'#ff5252'],['NE',45,'#aab3c5'],['E',90,'#aab3c5'],['SE',135,'#aab3c5'],['S',180,'#aab3c5'],['SW',225,'#aab3c5'],['W',270,'#aab3c5'],['NW',315,'#aab3c5']];
+  let labels = '';
+  for (const [t, a, c] of dirs){
+    const rad = toRad(a);
+    labels += '<text x="' + (100 + 68*Math.sin(rad)) + '" y="' + (100 - 68*Math.cos(rad) + 4) +
+      '" fill="' + c + '" font-size="11" font-weight="700" text-anchor="middle">' + t + '</text>';
+  }
+  $('compass').innerHTML =
+    '<circle cx="100" cy="100" r="96" fill="#12161f" stroke="#2a3446" stroke-width="3"/>' +
+    '<circle cx="100" cy="100" r="60" fill="none" stroke="#232c3b" stroke-width="1"/>' +
+    ticks + labels +
+    '<g transform="rotate(' + rot + ' 100 100)">' +
+      '<polygon points="100,20 93,100 107,100" fill="#ffd166"/>' +
+      '<polygon points="100,180 93,100 107,100" fill="#3a4356"/>' +
+    '</g>' +
+    '<circle cx="100" cy="100" r="7" fill="#ffd166" stroke="#0c0f14" stroke-width="2"/>';
+
+  if (target && userPos){
+    const card = $('targetCard');
+    card.querySelector('.name').textContent = target.n;
+    card.querySelector('.addr').textContent = (target.a || '').trim() || 'Padova';
+    card.querySelector('.dist').textContent = fmtDist(target.dist) + ' · ' + Math.round(rot) + '°';
+    card.querySelector('.hours').textContent = target.h ? '🕐 ' + target.h : '';
+    card.querySelector('a.osm').href = 'https://www.openstreetmap.org/?mlat=' + target.lat + '&mlon=' + target.lon + '#map=18/' + target.lat + '/' + target.lon;
+    card.querySelector('a.gm').href = 'https://www.google.com/maps/search/?api=1&query=' + target.lat + ',' + target.lon;
+    renderList();
+    renderMap();
+  }
+}
+function renderList(){
+  $('items').innerHTML = nearest.slice(0, 6).map((t, i) =>
+    '<div class="item' + (t === target ? ' active' : '') + '" data-i="' + i + '"><span>' + t.n + (t.a ? ' · ' + t.a : '') + '</span><span class="d">' + fmtDist(t.dist) + '</span></div>'
+  ).join('');
+  $('items').querySelectorAll('.item').forEach(el =>
+    el.addEventListener('click', () => { target = nearest[+el.dataset.i]; render(); })
+  );
+}
+
+// ---------- trascinamento manuale bussola ----------
+let drag = null;
+const wrap = $('compassWrap');
+function dragStart(e){
+  if (sensorMode) return;
+  drag = { x: (e.clientX !== undefined ? e.clientX : e.touches[0].clientX), h: heading || 0 };
+}
+function dragMove(e){
+  if (!drag || sensorMode) return;
+  const cx = e.clientX !== undefined ? e.clientX : e.touches[0].clientX;
+  heading = ((drag.h + ((cx - drag.x) / wrap.getBoundingClientRect().width) * 720) % 360 + 360) % 360;
+  headingSmooth = heading;
+  $('slider').value = Math.round(heading);
+  $('slider').style.display = 'block';
+  $('manualHint').style.display = 'block';
+  render();
+}
+wrap.addEventListener('mousedown', dragStart);
+wrap.addEventListener('touchstart', dragStart, { passive: true });
+window.addEventListener('mousemove', dragMove);
+window.addEventListener('touchmove', dragMove, { passive: true });
+window.addEventListener('mouseup', () => { drag = null; });
+window.addEventListener('touchend', () => { drag = null; });
+$('slider').addEventListener('input', e => { if (!sensorMode){ heading = +e.target.value; headingSmooth = heading; render(); } });
+
+// ---------- init ----------
+$('btnLoc').addEventListener('click', useMyLocation);
+$('btnSensor').addEventListener('click', enableSensor);
+
+if (window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === 'function'){
+  $('btnSensor').style.display = '';
+} else {
+  window.addEventListener('deviceorientationabsolute', onOrientation, true);
+  window.addEventListener('deviceorientation', onOrientation, true);
+  setTimeout(() => { if (!sensorMode) showManual(); }, 1500);
+}
+
+setPos(PRESETS[0], 'Posizione demo: Piazza dei Signori. Tocca la mappa per posizionarti, oppure “Usa la mia posizione”.', 'preset');
+</script>
+</body>
+</html>
